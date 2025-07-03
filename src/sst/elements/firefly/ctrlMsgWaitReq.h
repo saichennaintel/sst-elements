@@ -1,8 +1,8 @@
-// Copyright 2009-2025 NTESS. Under the terms
+// Copyright 2009-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2009-2025, NTESS
+// Copyright (c) 2009-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -106,6 +106,36 @@ class WaitReq {
         }
         return NULL;
     }
+
+
+  std::vector<_CommReq*> getComputeRequests() {
+
+        std::vector<_CommReq*> computereqs;
+        std::deque<X>::iterator iter = reqQ.begin();
+
+        //std::cout << "request Queue size = " << reqQ.size() << std::endl;
+
+        while ( iter != reqQ.end() ) {
+
+            //std::cout << "iter->req->m_type: " << iter->req->m_type << std::endl;
+
+
+            if ( iter->req->isCompute() ) {
+
+                _CommReq* req = iter->req;
+
+                computereqs.push_back(req);
+
+            }
+            ++iter;
+        }
+
+        //std::cout << " size of compute wait requests " << computereqs.size() << std::endl;
+
+        return computereqs;
+    }
+
+
 
   private:
     std::deque< X > reqQ;

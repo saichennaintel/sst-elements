@@ -13,33 +13,35 @@
 // information, see the LICENSE file in the top level directory of the
 // distribution.
 
+
 #include <sst_config.h>
 
-#include "funcSM/waitAll.h"
+#include "funcSM/asynccompute.h"
 
 using namespace SST::Firefly;
 
-WaitAllFuncSM::WaitAllFuncSM( SST::Params& params ) :
-    FunctionSMInterface( params ),
+AsyncComputeFuncSM::AsyncComputeFuncSM( SST::Params& params ) :
+    FunctionSMInterface(params),
     m_event( NULL )
 {
+    m_asynccompute_enterLatency  = (int) params.find("asynccompute_enterLatency", 1);
+    m_asynccompute_returnLatency = (int) params.find("asynccompute_returnLatency", 1); 
 }
 
-void WaitAllFuncSM::handleStartEvent( SST::Event *e, Retval& retval )
+void AsyncComputeFuncSM::handleStartEvent( SST::Event *e, Retval& retval )
 {
     assert( NULL == m_event );
-    m_dbg.debug(CALL_INFO,1,0,"\n");
+    m_event = static_cast< AsyncComputeStartEvent* >(e);
 
-    m_event = static_cast< WaitAllStartEvent* >(e);
+    m_dbg.debug(CALL_INFO,1,0,"AsyncCompute computetime=%d \n", m_event->computetime);
 
-    //proto()->waitAll( m_event->count, m_event->req, m_event->resp );
-    proto()->waitAllCompute( m_event->count, m_event->req, m_event->resp ); //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+    proto()->asyncCompute(m_event->computetime,m_event->req);	
+
 }
 
-void WaitAllFuncSM::handleEnterEvent( Retval& retval )
+void AsyncComputeFuncSM::handleEnterEvent( Retval& retval )
 {
-    m_dbg.debug(CALL_INFO,1,0,"\n");
-    retval.setExit(0);
     delete m_event;
     m_event = NULL;
+    retval.setExit(0);
 }

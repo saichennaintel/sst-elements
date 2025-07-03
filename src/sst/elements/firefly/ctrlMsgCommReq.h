@@ -1,8 +1,8 @@
-// Copyright 2009-2025 NTESS. Under the terms
+// Copyright 2009-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2009-2025, NTESS
+// Copyright (c) 2009-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -44,7 +44,8 @@ struct MatchHdr {
 class _CommReq : public MP::MessageRequestBase {
   public:
 
-    enum Type { Recv, Send, Isend, Irecv };
+    //Modified by Sai Chenna to accomodate Asynchronous compute. Need to find a better way to do this.
+    enum Type { Recv, Send, Isend, Irecv, AsyncCompute };
 
     _CommReq( Type type, std::vector<IoVec>& _ioVec,
         unsigned int dtypeSize, MP::RankID rank, uint32_t tag,
@@ -102,6 +103,24 @@ class _CommReq : public MP::MessageRequestBase {
         m_ioVec[0].addr = buf;
         m_ioVec[0].len = dtypeSize * count;
     }
+
+    //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+    _CommReq(Type type, uint32_t computetime, SimTime_t issuetime) :
+        m_type (type),
+        m_computetime_ns(computetime),
+        m_resp( NULL ),
+        m_done( true ),    // Setting this to done because it is an asynchronous compute. Made sure that it is checked by the wait requests only when the sufficient time has passed.  
+        m_destRank( MP::AnySrc ),
+        m_ignore( 0 ),
+        m_isMine( true ),
+        m_finiDelay_ns( 0 ),
+        m_vn(0),
+        m_issuetime(issuetime) // Need to know when the request has been issued inorder to know uif corresponding wait actually has to wait 
+
+    {
+        //std::cout << "Inside _CommReq constructor for Async Compute" << std::endl;
+    }
+
     ~_CommReq() {
     }
 
@@ -167,15 +186,49 @@ class _CommReq : public MP::MessageRequestBase {
         }
     }
 
+    //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+
+    bool isCompute() {
+
+        if (m_type == AsyncCompute ) {
+
+            return true;
+        }
+
+        return false;
+    }
+
+    //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+
+    SimTime_t getissuetime() {
+
+        return m_issuetime;
+    }
+
+    SimTime_t getcomputetime() {
+
+        return m_computetime_ns;
+    }
+
+    SimTime_t getfinishtime() {
+
+        return m_issuetime + m_computetime_ns;
+    }
+
     // need to save info for the long protocol ack
     int m_ackKey;
     int m_ackNid;
     int m_vn;
 
+    uint64_t            m_computetime_ns; //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+
+    Type m_type;
+
+
   private:
 
     MatchHdr            m_hdr;
-    Type                m_type;
+    //Type                m_type;
     std::vector<IoVec>  m_ioVec;
     MP::MessageResponse* m_resp;
     bool                m_done;
@@ -184,6 +237,7 @@ class _CommReq : public MP::MessageRequestBase {
     uint64_t            m_ignore;
     bool                m_isMine;
     int                 m_finiDelay_ns;
+    SimTime_t  m_issuetime;   //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
 };
 
 }

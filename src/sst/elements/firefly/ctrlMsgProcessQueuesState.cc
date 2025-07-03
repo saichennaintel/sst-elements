@@ -1,8 +1,8 @@
-// Copyright 2009-2025 NTESS. Under the terms
+// Copyright 2009-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2009-2025, NTESS
+// Copyright (c) 2009-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -45,13 +45,14 @@ ProcessQueuesState::ProcessQueuesState( ComponentId_t id, Params& params ) :
     int mask = params.find<int32_t>("pqs.verboseMask",-1);
     m_nicsPerNode = params.find<int32_t>("nicsPerNode",1);
     m_maxUnexpectedMsg = params.find<int32_t>("pqs.maxUnexpectedMsg",32);
-    m_maxPostedShortBuffers = params.find<int32_t>("pqs.maxPostedShortBuffers",512);
-    m_minPostedShortBuffers = params.find<int32_t>("pqs.minPostedShortBuffers",5);
+    m_maxPostedShortBuffers = params.find<int32_t>("pqs.maxPostedShortBuffers",512); 
+    m_minPostedShortBuffers = params.find<int32_t>("pqs.minPostedShortBuffers",5); 
 
     m_dbg.init("", level, mask, Output::STDOUT );
 
     m_statPstdRcv = registerStatistic<uint64_t>("posted_receive_list");
     m_statRcvdMsg = registerStatistic<uint64_t>("received_msg_list");
+    m_mem_lat_overhead = registerStatistic<uint64_t>("mem_lat_overhead");
 
     m_msgTiming = loadAnonymousSubComponent< MsgTiming >( "firefly.msgTiming", "", 0, ComponentInfo::SHARE_NONE, params );
 
@@ -60,11 +61,11 @@ ProcessQueuesState::ProcessQueuesState( ComponentId_t id, Params& params ) :
 
     m_delayLink = configureSelfLink(
                         "ProcessQueuesStateSelfLink." + ss.str(), "1 ns",
-                                new Event::Handler2<ProcessQueuesState,&ProcessQueuesState::delayHandler>(this));
+                                new Event::Handler<ProcessQueuesState>(this,&ProcessQueuesState::delayHandler));
 
     m_loopLink = configureLink(
             params.find<std::string>("loopBackPortName", "loop"), "1 ns",
-            new Event::Handler2<ProcessQueuesState,&ProcessQueuesState::eventLoopHandler>(this) );
+            new Event::Handler<ProcessQueuesState>(this,&ProcessQueuesState::loopHandler) );
     assert(m_loopLink);
 
     m_ackVN = params.find<int>( "ackVN", 0 );
@@ -156,11 +157,32 @@ void ProcessQueuesState::enterSend( _CommReq* req, uint64_t exitDelay )
         callback = std::bind(
                     &ProcessQueuesState::processSend_0, this, req );
     }
+
+    m_mem_lat_overhead->addData(delay);
+    //std::cout << "m_nic->getNodeId() = " <<  m_nic->getNodeId() << "txSetupModParams.base of size " << req->getLength() << " bytes is " <<  delay << std::endl;
+
     schedCallback( callback, delay);
 }
 
+void ProcessQueuesState::enterasyncCompute(_CommReq* req, uint64_t exitDelay ) {
+
+	//uint64_t delay = req->m_computetime_ns ; 
+	VoidFunction callback;
+
+	callback = std::bind(&ProcessQueuesState::enterMakeProgress,this,exitDelay);
+
+	//schedCallback(callback,delay);
+    schedCallback(callback);
+}
+
+
 void ProcessQueuesState::processSend_0( _CommReq* req )
 {
+
+    Memory *tmp_mem = static_cast<Memory*>(m_mem);
+    m_mem_lat_overhead->addData(tmp_mem->txMemcpyDelay(sizeof(req->hdr())));
+    //std::cout << "m_nic->getNodeId() = " <<  m_nic->getNodeId() << "txMemcpyDelay of size " << sizeof(req->hdr()) << " bytes is " <<  tmp_mem->txMemcpyDelay(sizeof(req->hdr())) << std::endl;
+
     m_mem->write(
         std::bind( &ProcessQueuesState::processSend_1, this, req ),
         0, sizeof( req->hdr())
@@ -175,8 +197,18 @@ void ProcessQueuesState::processSend_1( _CommReq* req )
     size_t length = req->getLength( );
 
     if ( length > shortMsgLength() ) {
+
+        Memory *tmp_mem = static_cast<Memory*>(m_mem);
+        m_mem_lat_overhead->addData(tmp_mem->regRegionDelay(length));
+        //std::cout << "m_nic->getNodeId() = " <<  m_nic->getNodeId() << "memory pin overhead of msg size " << length << " bytes is " <<  tmp_mem->regRegionDelay(length) << std::endl;
+
         m_mem->pin( callback, 0, length );
     } else {
+
+        Memory *tmp_mem = static_cast<Memory*>(m_mem);
+        m_mem_lat_overhead->addData(tmp_mem->txMemcpyDelay( length ));
+        //std::cout << "m_nic->getNodeId() = " <<  m_nic->getNodeId() << "memory copy overhead of msg size " << length << " bytes is " <<  tmp_mem->txMemcpyDelay(length) << std::endl;
+
         m_mem->copy( callback, 0, 1, length );
     }
 }
@@ -452,6 +484,74 @@ void ProcessQueuesState::enterWait( WaitReq* req, uint64_t exitDelay  )
     processWait_0( &m_funcStack );
 }
 
+
+void ProcessQueuesState::enterWaitCompute( WaitReq* req, uint64_t exitDelay  )
+{
+    
+    
+    m_exitDelay = exitDelay;    
+
+    WaitCtx* ctx = new WaitCtx ( req,
+        std::bind( &ProcessQueuesState::processWait_0, this, &m_funcStack )
+    );
+
+    //Debug. Delete it later.
+    //std::cout << "Check: Inside ProcessQueuesState::enterWaitCompute method! Current time (ns): " << getCurrentSimTimeNano() << std::endl;
+
+    enterWaitCompute_0( ctx);
+
+}
+
+
+
+void ProcessQueuesState::enterWaitCompute_0( WaitCtx* ctx )
+{
+
+
+    std::vector<_CommReq*> computereqs = ctx->req->getComputeRequests();
+
+    SimTime_t max = 0;
+
+    for (int i=0; i < computereqs.size() ; i++) {
+
+        SimTime_t finish_time = computereqs[i]->getfinishtime();
+
+        max = (finish_time > max) ? finish_time : max ;
+
+    }
+
+    VoidFunction callback;
+
+    callback = std::bind(
+                &ProcessQueuesState::enterWaitCompute_1, this, ctx );
+
+
+    if (getCurrentSimTimeNano() >= max) { // Means all asynchronous compute events have finished by this time, no need to wait.
+
+        schedCallback(callback, 0);
+
+    }
+
+    else {
+
+        uint64_t delay = max - getCurrentSimTimeNano() ;   // Means all the compute events have not yet finished. Advance the time until all the compute events are done.
+
+        schedCallback(callback,delay);
+
+
+    }
+    
+}
+
+void ProcessQueuesState::enterWaitCompute_1(WaitCtx* ctx) {
+
+    m_funcStack.push_back( ctx );
+
+    processWait_0( &m_funcStack );
+}
+
+
+
 void ProcessQueuesState::processWait_0( Stack* stack )
 {
     dbg().debug(CALL_INFO,2,DBG_MSK_PQS_APP_SIDE,"stack.size()=%lu num pstd %lu, recvdMsgQ %s\n",
@@ -509,7 +609,23 @@ void ProcessQueuesState::processWaitCtx_1( WaitCtx* ctx, _CommReq* req )
     }
 
     if ( req->isMine() ) {
-        delete req;
+
+        //Debug. Delete it later.
+        
+        //std::cout << "Check: Inside ProcessQueuesState::processWaitCtx_1 method! Current time (ns): " << getCurrentSimTimeNano() << "req->getissuetime() = " << req->getissuetime() << std::endl;
+        
+        if (!(req->isCompute())) {
+
+            delete req;
+        }
+        /*
+        else {
+            std::cout << "Check: Not deleting req due to asynccompute! Current time (ns): " << getCurrentSimTimeNano() << "req->getissuetime() = " << req->getissuetime() << std::endl;
+        
+        }
+        */
+
+        //delete req;
     }
 }
 
@@ -839,7 +955,7 @@ void ProcessQueuesState::runInterruptCtx( )
 		return;
 	}
 
-	// we are now in interrupt context
+	// we are now in interrupt context 
 
     InterruptCtx* ctx = new InterruptCtx(
             std::bind( &ProcessQueuesState::leaveInterruptCtx, this, &m_intStack )
@@ -848,7 +964,7 @@ void ProcessQueuesState::runInterruptCtx( )
     m_intStack.push_back( ctx );
     dbg().debug(CALL_INFO,1,DBG_MSK_PQS_INT,"m_intStack.size()=%zu\n",m_intStack.size());
 
-	// clear the missed interrupt flag
+	// clear the missed interrupt flag 
 	m_missedInt = false;
     dbg().debug(CALL_INFO,1,DBG_MSK_PQS_INT,"call processQueues\n" );
 	processQueues( &m_intStack );
@@ -1108,7 +1224,7 @@ void ProcessQueuesState::loopSendResp( int core, void* key )
     m_loopLink->send(0, new LoopBackEvent( core, key ) );
 }
 
-void ProcessQueuesState::eventLoopHandler( Event* ev )
+void ProcessQueuesState::loopHandler( Event* ev )
 {
     LoopBackEvent* event = static_cast< LoopBackEvent* >(ev);
     m_dbg.debug(CALL_INFO,1,DBG_MSK_PQS_LOOP,"%s core=%d key=%p\n",

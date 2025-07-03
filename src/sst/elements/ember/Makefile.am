@@ -185,6 +185,18 @@ libember_la_SOURCES = \
 	mpi/motifs/emberNtoM.cc \
 	mpi/motifs/emberBFS.h \
 	mpi/motifs/emberBFS.cc \
+	mpi/motifs/emberonecclallreduce.h \
+	mpi/motifs/emberonecclallreduce.cc \
+	mpi/coll/allreduce/rabenseifner.h \
+	mpi/coll/allreduce/rabenseifner.cc \
+	mpi/coll/allreduce/collectivetree.h \
+	mpi/coll/allreduce/collectivetree.cc \
+	mpi/coll/allreduce/TAHA.h \
+	mpi/coll/allreduce/TAHA.cc \
+	mpi/coll/allreduce/ring.h \
+	mpi/coll/allreduce/ring.cc \
+	mpi/coll/allreduce/oneCCLDoubleBinaryTree.h \
+	mpi/coll/allreduce/oneCCLDoubleBinaryTree.cc \
 	libs/emberShmemLib.h \
 	libs/shmem/emberFamEvent.h \
 	libs/shmem/emberFamAddEv.h \

@@ -1,8 +1,8 @@
-// Copyright 2013-2025 NTESS. Under the terms
+// Copyright 2013-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2013-2025, NTESS
+// Copyright (c) 2013-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -518,6 +518,21 @@ class CommDestroyStartEvent : public Event {
 
     NotSerializable(CommDestroyStartEvent)
 };
+
+//Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+class AsyncComputeStartEvent : public Event {
+
+  public:
+    AsyncComputeStartEvent( uint32_t _computetime, MP::MessageRequest* _req ) :
+        computetime( _computetime ),
+        req( _req )
+    {}
+    uint32_t                computetime;
+    MP::MessageRequest*     req;
+
+    NotSerializable(AsyncComputeStartEvent)
+};
+
 
 
 }

@@ -1,8 +1,8 @@
-// Copyright 2013-2025 NTESS. Under the terms
+// Copyright 2013-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2013-2025, NTESS
+// Copyright (c) 2013-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -170,6 +170,18 @@ void API::isend( const Hermes::MemAddr& addr, size_t len, nid_t dest, uint64_t t
     sendv_common( ioVec, MP::CHAR, dest, tag, group, req, vn );
 }
 
+//Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+
+void API::asyncCompute(uint32_t computetime, MP::MessageRequest* req )
+{
+
+	*req = new _CommReq( _CommReq::AsyncCompute, computetime, getCurrentSimTimeNano() );
+
+	m_processQueuesState->enterasyncCompute( static_cast<_CommReq*>(*req) );
+	
+	
+}
+
 void API::sendv(std::vector<IoVec>& ioVec, nid_t dest, uint64_t tag, int vn )
 {
     sendv_common( ioVec, MP::CHAR, dest, tag, MP::GroupWorld, NULL, vn );
@@ -280,6 +292,53 @@ void API::waitAll( std::vector<CommReq*>& reqs )
     }
     m_processQueuesState->enterWait( new WaitReq( tmp ), waitallStateDelay() );
 }
+
+/*#########################################################################################
+### //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.  ###
+#########################################################################################*/
+
+void API::waitCompute( CommReq* req )
+{
+    std::vector<CommReq*> tmp;
+    tmp.push_back( req );
+    waitAllCompute( tmp );
+}
+
+void API::waitCompute( MP::MessageRequest req, MP::MessageResponse* resp )
+{
+    m_dbg.debug(CALL_INFO,1,1,"\n");
+    m_processQueuesState->enterWaitCompute( new WaitReq( req, resp ) );
+}
+
+void API::waitAllCompute( std::vector<CommReq>& reqs )
+{
+    std::vector<CommReq*> tmp(reqs.size());
+    for ( unsigned i = 0; i < reqs.size(); i++ ) {
+        tmp[i] = &reqs[i];
+    }
+	waitAllCompute( tmp );
+}
+
+void API::waitAllCompute( std::vector<CommReq*>& reqs )
+{
+    std::vector<_CommReq*> tmp(reqs.size());
+    for ( unsigned i = 0; i < reqs.size(); i++ ) {
+        tmp[i] = reqs[i]->req;
+    }
+
+    
+    m_processQueuesState->enterWaitCompute( new WaitReq( tmp ), waitallStateDelay() );
+}
+
+void API::waitAllCompute( int count, MP::MessageRequest req[],
+        MP::MessageResponse* resp[] )
+{
+    m_dbg.debug(CALL_INFO,1,1,"\n");
+    m_processQueuesState->enterWaitCompute( new WaitReq( count, req, resp ) );
+}
+/*
+#########################################################################################
+*/
 
 void API::send( const Hermes::MemAddr& buf, uint32_t count,
         MP::PayloadDataType dtype, MP::RankID dest, uint32_t tag,

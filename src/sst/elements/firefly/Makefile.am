@@ -41,6 +41,8 @@ libfirefly_la_SOURCES = \
 	funcSM/event.h \
 	funcSM/rank.h \
 	funcSM/size.h \
+	funcSM/asynccompute.h \
+	funcSM/asynccompute.cc \
 	funcSM/alltoallv.h \
 	funcSM/alltoallv.cc \
 	funcSM/scatterv.h \

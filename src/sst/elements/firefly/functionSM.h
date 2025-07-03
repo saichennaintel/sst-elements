@@ -1,8 +1,8 @@
-// Copyright 2013-2025 NTESS. Under the terms
+// Copyright 2013-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2013-2025, NTESS
+// Copyright (c) 2013-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -44,6 +44,7 @@ class ProtocolAPI;
         NAME(Scatterv)   \
         NAME(Alltoallv)   \
         NAME(Send)   \
+        NAME(AsyncCompute) \
         NAME(Recv)   \
         NAME(Cancel)   \
         NAME(Test)   \
@@ -92,6 +93,11 @@ class FunctionSM : public SubComponent {
 		This component also looks for function names as the top of a parameter hierarchy such as "Fini.*"
 	*/
 
+    SST_ELI_DOCUMENT_STATISTICS(
+        {"total_enterLatency", "total time spent on enterLatency (in nanosecs)", "latency", 1},
+        {"total_returnLatency", "total time spent on returnLatency (in nanosecs)", "latency", 1},
+    )
+
     typedef std::function<void()> Callback;
 
     enum FunctionEnum{
@@ -131,6 +137,10 @@ class FunctionSM : public SubComponent {
     Output              m_dbg;
     SST::Params         m_params;
     ProtocolAPI*	m_proto;
+
+    Statistic<uint64_t>* m_total_enterLatency;
+    Statistic<uint64_t>* m_total_returnLatency;
+
 };
 
 }

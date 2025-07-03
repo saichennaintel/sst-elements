@@ -1,8 +1,8 @@
-// Copyright 2013-2025 NTESS. Under the terms
+// Copyright 2013-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2013-2025, NTESS
+// Copyright (c) 2013-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -319,4 +319,12 @@ void HadesMP::comm_destroy( MP::Communicator comm, MP::Functor* retFunc )
     dbg().debug(CALL_INFO,1,1,"\n");
     functionSM().start( FunctionSM::CommDestroy, retFunc,
             new CommDestroyStartEvent( comm ) );
+}
+
+//Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+void HadesMP::asyncCompute(uint32_t computetime, MessageRequest* req, Functor* retFunc )
+{
+    dbg().debug(CALL_INFO,1,1," count=%d \n", computetime);
+    functionSM().start( FunctionSM::AsyncCompute, retFunc,
+                new AsyncComputeStartEvent( computetime, req));
 }

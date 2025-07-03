@@ -1,8 +1,8 @@
-// Copyright 2009-2025 NTESS. Under the terms
+// Copyright 2009-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2009-2025, NTESS
+// Copyright (c) 2009-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -97,10 +97,11 @@ class ProcessQueuesState : public SubComponent
     SST_ELI_DOCUMENT_PORTS(
         {"loop", "loopback port", {}}
     )
-
+    
     SST_ELI_DOCUMENT_STATISTICS(
         { "posted_receive_list", "", "count", 1 },
-        { "received_msg_list", "", "count", 1 }
+        { "received_msg_list", "", "count", 1 },
+        { "mem_lat_overhead","total latency overhead added by memory", "latency", 0}
     )
 
   private:
@@ -153,15 +154,22 @@ class ProcessQueuesState : public SubComponent
     void enterSend( _CommReq*, uint64_t exitDelay = 0 );
     void enterRecv( _CommReq*, uint64_t exitDelay = 0 );
     void enterWait( WaitReq*, uint64_t exitDelay = 0 );
+
+    //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+    void enterWaitCompute(WaitReq* , uint64_t exitDelay = 0 );
+
     void enterMakeProgress( uint64_t exitDelay = 0 );
     void enterCancel( MP::MessageRequest, uint64_t exitDelay = 0 );
     void enterTest( WaitReq*, int* flag, uint64_t exitDelay = 0 );
+    void enterasyncCompute(_CommReq*, uint64_t exitDelay = 0);
+
+
 
     void needRecv( int, size_t );
 
   private:
 
-    void eventLoopHandler( Event* );
+    void loopHandler( Event* );
     void delayHandler( Event* );
 
     struct CtrlHdr {
@@ -350,6 +358,10 @@ class ProcessQueuesState : public SubComponent
     void processWaitCtx_1( WaitCtx*, _CommReq* req );
     void processWaitCtx_2( WaitCtx* );
 
+    //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+    void enterWaitCompute_0( WaitCtx* );
+    void enterWaitCompute_1( WaitCtx* );
+
     void processQueues( Stack* );
     void processQueues0( Stack* );
 
@@ -457,7 +469,7 @@ class ProcessQueuesState : public SubComponent
     const char* recvdMsgQsize() {
 		static char m_stringBuf[100];
 		snprintf( m_stringBuf, 100, "%d:%zu,%zu",m_recvdMsgQpos, m_recvdMsgQ[0].size(), m_recvdMsgQ[1].size() );
-        return m_stringBuf;
+        return m_stringBuf; 
     }
 
     void loopHandler( int, std::vector<IoVec>&, void* );
@@ -506,6 +518,7 @@ class ProcessQueuesState : public SubComponent
 
     Statistic<uint64_t>* m_statRcvdMsg;
     Statistic<uint64_t>* m_statPstdRcv;
+    Statistic<uint64_t>* m_mem_lat_overhead;
     int m_numSent;
     int m_numRecv;
     int m_nicsPerNode;

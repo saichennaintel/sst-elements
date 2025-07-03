@@ -1,8 +1,8 @@
-// Copyright 2013-2025 NTESS. Under the terms
+// Copyright 2013-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2013-2025, NTESS
+// Copyright (c) 2013-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -56,15 +56,19 @@ FunctionSM::FunctionSM( ComponentId_t id, SST::Params& params, ProtocolAPI* prot
             Output::STDOUT );
 
     m_toDriverLink = configureSelfLink("ToDriver", "1 ps",
-        new Event::Handler2<FunctionSM,&FunctionSM::handleToDriver>(this));
+        new Event::Handler<FunctionSM>(this,&FunctionSM::handleToDriver));
 
     m_fromDriverLink = configureSelfLink("FromDriver", "1 ps",
-        new Event::Handler2<FunctionSM,&FunctionSM::handleStartEvent>(this));
+        new Event::Handler<FunctionSM>(this,&FunctionSM::handleStartEvent));
     assert( m_fromDriverLink );
 
     m_toMeLink = configureSelfLink("ToMe", "1 ns",
-        new Event::Handler2<FunctionSM,&FunctionSM::handleEnterEvent>(this));
+        new Event::Handler<FunctionSM>(this,&FunctionSM::handleEnterEvent));
     assert( m_toMeLink );
+
+    //Additional Statistics to aggregate overhead times
+    m_total_enterLatency = registerStatistic<uint64_t>("total_enterLatency");
+    m_total_returnLatency = registerStatistic<uint64_t>("total_returnLatency");
 }
 
 FunctionSM::~FunctionSM()
@@ -101,6 +105,14 @@ void FunctionSM::setup( Info* info )
     defaultParams.insert( "smallCollectiveSize",
                         m_params.find<std::string>("smallCollectiveSize","0"), true );
     defaultParams.insert( "verboseLevel", m_params.find<std::string>("verboseLevel","0"), true );
+
+    //Included by Sai Chenna to facilitate enter and exit latencies for asynccompute.
+    /*
+    defaultParams.insert( "asynccompute_enterLatency",m_params.find<std::string>("defaultasynccompute_enterLatency","0"), true );
+    defaultParams.insert( "asynccompute_returnLatency",m_params.find<std::string>("defaultasynccompute_returnLatency","0"), true );
+    */
+    //====================================================================================
+
     std::ostringstream tmp;
     tmp <<  nodeId;
     defaultParams.insert( "nodeId", tmp.str(), true );
@@ -148,6 +160,19 @@ void FunctionSM::initFunction( Info* info,
         params.insert( "smallCollectiveSize", defaultParams.find<std::string>( "smallCollectiveSize" ), true );
     }
 
+    //Included by Sai Chenna to facilitate enter and exit latencies for asynccompute.
+    /*
+    if (params.find<std::string>("asynccompute_enterLatency").empty() ) {
+        params.insert("asynccompute_enterLatency", defaultParams.find<std::string>( "asynccompute_enterLatency" ), true);
+    }
+
+    if (params.find<std::string>("asynccompute_returnLatency").empty() ) {
+        params.insert("asynccompute_returnLatency", defaultParams.find<std::string>( "asynccompute_returnLatency" ), true);
+    }
+    */
+    //=======================================================================================
+
+
     params.insert( "nodeId", defaultParams.find<std::string>( "nodeId" ), true );
 
     m_smV[ num ] = loadModule<FunctionSMInterface>( module + "." + name, params );
@@ -174,6 +199,12 @@ void FunctionSM::start(int type, Callback callback,  SST::Event* e)
     assert( ! m_sm );
     m_sm = m_smV[ type ];
     m_dbg.debug(CALL_INFO,3,0,"%s enter\n",m_sm->name().c_str());
+
+    //=======Statistic to aggregate MPI latency contribution to total simulation time
+    m_total_enterLatency->addData(m_sm->enterLatency());
+    //std::cout << "Adding " << m_sm->enterLatency() << " ns to m_total_enterLatency statistic" << std::endl;
+    //================================================================================
+
     m_fromDriverLink->send( m_sm->enterLatency(), e );
 }
 
@@ -184,7 +215,27 @@ void FunctionSM::start( int type, MP::Functor* retFunc, SST::Event* e )
     assert( ! m_sm );
     m_sm = m_smV[ type ];
     m_dbg.debug(CALL_INFO,3,0,"%s enter\n",m_sm->name().c_str());
-    m_fromDriverLink->send( m_sm->enterLatency(), e );
+
+    //Included by Sai Chenna to facilitate enter and exit latencies for asynccompute.
+    // You can reset to default behavior by removing the if path
+    if (m_sm->name() == "AsyncCompute") {
+
+        m_fromDriverLink->send(m_sm->asynccompute_enterLatency(), e );
+    }
+
+    else {
+
+        //=======Statistic to aggregate MPI latency contribution to total simulation time
+        m_total_enterLatency->addData(m_sm->enterLatency());
+	//std::cout << "Adding " << m_sm->enterLatency() << " ns to m_total_enterLatency statistic" << std::endl;
+        //================================================================================
+
+        m_fromDriverLink->send( m_sm->enterLatency(), e );
+    }
+
+    //================================================================================= 
+
+    
 }
 
 void FunctionSM::handleStartEvent( SST::Event* e )
@@ -213,7 +264,27 @@ void FunctionSM::processRetval(  Retval& retval )
         m_dbg.debug(CALL_INFO,3,0,"Exit %" PRIu64 "\n", retval.value() );
         if ( m_retFunc ) {
             DriverEvent* x = new DriverEvent( m_retFunc, retval.value() );
-            m_toDriverLink->send( m_sm->returnLatency(), x );
+
+            //Included by Sai Chenna to facilitate enter and exit latencies for asynccompute.
+            // You can reset to default behavior by removing the if path
+            if (m_sm->name() == "AsyncCompute") {
+
+                //std::cout << "m_sm->name() = " << m_sm->name() << " Calling asynccompute_returnLatency from FunctionSM::processRetVal function!" << std::endl;
+                m_toDriverLink->send( m_sm->asynccompute_returnLatency(), x );
+            }
+
+            else {
+
+                //std::cout << "m_sm->name() = " << m_sm->name() << " Calling regular returnLatency from FunctionSM::processRetVal function!" << std::endl;
+
+                //=======Statistic to aggregate MPI latency contribution to total simulation time
+                m_total_returnLatency->addData(m_sm->returnLatency());
+		//std::cout << "Adding " << m_sm->returnLatency() << " ns to m_total_returnLatency statistic" << std::endl;
+                //================================================================================
+                m_toDriverLink->send( m_sm->returnLatency(), x );
+            }
+            //==============================================================================
+
         } else {
             m_callback();
         }

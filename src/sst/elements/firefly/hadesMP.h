@@ -1,8 +1,8 @@
-// Copyright 2013-2025 NTESS. Under the terms
+// Copyright 2013-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2013-2025, NTESS
+// Copyright (c) 2013-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -194,6 +194,9 @@ class HadesMP : public MP::Interface
         MP::Communicator*, MP::Functor* );
 
     virtual void comm_destroy( MP::Communicator, MP::Functor* );
+
+    //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+    virtual void asyncCompute(uint32_t, MP::MessageRequest* req, MP::Functor*);
 
   private:
     Output  m_dbg;

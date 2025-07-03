@@ -1,8 +1,8 @@
-// Copyright 2013-2025 NTESS. Under the terms
+// Copyright 2013-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2013-2025, NTESS
+// Copyright (c) 2013-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -87,6 +87,15 @@ class FunctionSMInterface : public Module {
     virtual int returnLatency() { return m_returnLatency; }
     virtual std::string protocolName() { return ""; }
 
+    //Included by Sai Chenna to facilitate enter and exit latencies for asynccompute.
+    /*
+    virtual int asynccompute_enterLatency() { return m_asynccompute_enterLatency; }
+    virtual int asynccompute_returnLatency() { return m_asynccompute_returnLatency; }
+    */
+    virtual int asynccompute_enterLatency() { return 1;}
+    virtual int asynccompute_returnLatency() { return 1;}
+    //===============================================================================
+
   protected:
     Info*           m_info;
     ProtocolAPI*    m_proto;
@@ -94,6 +103,13 @@ class FunctionSMInterface : public Module {
     std::string     m_name;
     int             m_enterLatency;
     int             m_returnLatency;
+
+    //Included by Sai Chenna to facilitate enter and exit latencies for asynccompute.
+    /*
+    int             m_asynccompute_enterLatency;
+    int             m_asynccompute_returnLatency;
+    */
+    //===============================================================================
 };
 
 }

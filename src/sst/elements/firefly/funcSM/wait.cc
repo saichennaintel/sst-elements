@@ -1,8 +1,8 @@
-// Copyright 2013-2025 NTESS. Under the terms
+// Copyright 2013-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2013-2025, NTESS
+// Copyright (c) 2013-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -32,7 +32,8 @@ void WaitFuncSM::handleStartEvent( SST::Event *e, Retval& retval )
 
     m_event = static_cast< WaitStartEvent* >(e);
 
-    proto()->wait( m_event->req, m_event->resp );
+    //proto()->wait( m_event->req, m_event->resp );
+    proto()->waitCompute( m_event->req, m_event->resp );  //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
 }
 
 void WaitFuncSM::handleEnterEvent( Retval& retval )

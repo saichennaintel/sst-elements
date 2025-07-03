@@ -1,8 +1,8 @@
-// Copyright 2009-2025 NTESS. Under the terms
+// Copyright 2009-2023 NTESS. Under the terms
 // of Contract DE-NA0003525 with NTESS, the U.S.
 // Government retains certain rights in this software.
 //
-// Copyright (c) 2009-2025, NTESS
+// Copyright (c) 2009-2023, NTESS
 // All rights reserved.
 //
 // Portions are copyright of other developers:
@@ -107,6 +107,14 @@ class API : public ProtocolAPI {
     void waitAll( std::vector<CommReq*>& );
     void waitAll( std::vector<CommReq>& );
 
+    //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+    void waitCompute( CommReq* );
+    void waitAllCompute( std::vector<CommReq*>& );
+    void waitAllCompute( std::vector<CommReq>& );
+    void waitCompute( MP::MessageRequest, MP::MessageResponse* resp );
+    void waitAllCompute( int count, MP::MessageRequest req[],
+                MP::MessageResponse* resp[] );
+
 	void send( const Hermes::MemAddr& buf, uint32_t count,
 		MP::PayloadDataType dtype, MP::RankID dest, uint32_t tag,
         MP::Communicator group );
@@ -132,6 +140,10 @@ class API : public ProtocolAPI {
               	MP::MessageResponse* resp );
     void waitAll( int count, MP::MessageRequest req[],
                 MP::MessageResponse* resp[] );
+
+    //Added by Sai Chenna for DL workloads. Should figure out a better way to do this.
+
+    void asyncCompute(uint32_t computetime, MP::MessageRequest* req);
 
   private:
     void sendv_common( std::vector<IoVec>& ioVec,
